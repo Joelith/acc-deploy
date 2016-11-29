@@ -8,8 +8,6 @@ var restler = require('restler');
 var archiver = require('archiver');
 var fs = require('fs');
 
-var unirest = require('unirest');
-
 var Promise = require('bluebird');
 Promise.promisifyAll(prompt);
 
@@ -127,62 +125,118 @@ var created_zip = new Promise(function(resolve) {
 .then(function () {
 	// Upload the server.zip file to the storage cloud container
 	return new Promise(function(resolve, reject) {
-		/*restler.put(storage_url + '/v1/Storage-' + identity_domain + '/' + storage_container + '/' + program.name + '.zip', {
-			data : {
-				'ausemon2.zip': 	restler.file(program.name + '.zip', null, file_size, null, 'application/zip')
+		rest.put(storage_url + '/v1/Storage-' + identity_domain + '/' + storage_container + '/' + program.name + '.zip', {
+			headers:{
+				'X-AUTH-TOKEN' : storage_token
 			},
-			multipart : true,
-			headers : {
-				'X-AUTH-TOKEN': storage_token
-			}
-		}).on('success', function (data, result) {
-			//console.log('result', result);
-			console.log('upload complete', data, result);
-		}).on('error', function(error) {
-			console.log('error', error);
-		});*/
-		unirest.put(storage_url + '/v1/Storage-' + identity_domain + '/' + storage_container + '/' + program.name + '.zip')
-			.headers({
-				'X-AUTH-TOKEN' : storage_token,
-				'Content-Type' : 'application/zip'
-			})
-			.attach('file', program.name + '.zip')
-			.end(function (response) {
-				console.log('resp', response);
-			})
+			data: fs.readFileSync(program.name + '.zip')
+		}).then(function (result) {
+			console.log('Successfully upload package to storage cloud service');
+			resolve();
+		}, function (error) {
+			console.error(chalk.red('uploade package failed!'));
+			console.error(chalk.red('Message: ' + error + '. Status Code: ' + error.statusCode));
+			reject(error);
+		});
 	});
 })
 .then(function () {
-	// Check if the container exists
-	console.log('Checking application exists - ' + api_url + '/paas/service/apaas/api/v1.1/apps/' + identity_domain + '/' + program.name);
-	rest.get(api_url + '/paas/service/apaas/api/v1.1/apps/' + identity_domain + '/' + program.name, {
-		username : username,
-		password : password,
-		headers  : {
-			'X-ID-TENANT-NAME' : identity_domain
-		}
-	}).then(function (result) {
-		console.log('success', result);
-		// Update the application
-	}, function (error) {
-		if (error.statusCode == 404) {
-			// The application does not exist. Ask if they want us to create it for them
-			/*co(function *() {
-				console.log('Application does not exist.');
-				var create = yield prompt.confirm('Create?: [no]');
-
-				console.log('create:', create);
-				if (!create) {
+	// Check if the application exists
+	return new Promise(function(resolve, reject) {
+		console.log('Checking application exists - ' + api_url + '/paas/service/apaas/api/v1.1/apps/' + identity_domain + '/' + program.name);
+		rest.get(api_url + '/paas/service/apaas/api/v1.1/apps/' + identity_domain + '/' + program.name, {
+			username : username,
+			password : password,
+			headers  : {
+				'X-ID-TENANT-NAME' : identity_domain
+			}
+		}).then(function (result) {
+//			console.log(result);
+			prompt.confirmAsync('Update?: [no]').then(function (response) {
+				if (!response) {
+					// They don't want us to update one. Exit.
 					process.exit(1);
-					return;
+				} else {
+					// Update the application
+					console.log('Updating the application');
+					var data_for_update = {
+						'archiveURL': storage_container + '/' + program.name + '.zip',
+						'note':'update application ' + program.name
+					};
+					if(cfg['manifest_path']){
+						data_for_update.manifest = restler.file(cfg['manifest_path'], null, fs.statSync(cfg['manifest_path'])['size'], null, 'application/json');
+					}
+					if(cfg['deployment_path']){
+						data_for_update.deployment = restler.file(cfg['deployment_path'], null, fs.statSync(cfg['deployment_path'])['size'], null, 'application/json');
+					}
+					
+					rest.put(api_url + '/paas/service/apaas/api/v1.1/apps/' + identity_domain + '/' + program.name, {
+						username : username,
+						password : password,
+						headers : {
+							'X-ID-TENANT-NAME' : identity_domain
+						},
+						multipart : true,
+						data: data_for_update
+					}).then(function (result) {
+						console.log('Successfully update application');
+						resolve();
+					},function(error) {
+						console.error(chalk.red('Update application failed'));
+						console.error(chalk.red('Message: ' + error + '. Status Code: ' + error.statusCode));
+						reject(error);
+					});
 				}
+			});
+		}, function (error) {
+			if (error.statusCode == 404) {
+			// The application does not exist. Ask if they want us to create it for them
+				console.log('Application does not exist.');
+				prompt.confirmAsync('Create?: [no]').then(function (response){
+					if (!response) {
+						process.exit(1);
+						return;
+					}
 				// Create the application
 				console.log('Creating the application');
-			});	*/
-		} else {
-			console.error(chalk.red('Unable to get application from the cloud. Check name and connection details'));
-			console.error(chalk.red('Message: ' + error + '. Status Code: ' + error.statusCode));
-		}
+				var data_for_create = {
+						'name': program.name,
+						'runtime': 'node',
+						'subscription' : cfg['subscription'] ? cfg['subscription'] : 'hourly',
+						'archiveURL': storage_container + '/' + program.name + '.zip',
+						'note':'create application ' + program.name
+					};
+					if(cfg['manifest_path']){
+						data_for_create.manifest = restler.file(cfg['manifest_path'], null, fs.statSync(cfg['manifest_path'])['size'], null, 'application/json');
+					}
+					if(cfg['deployment_path']){
+						data_for_create.deployment = restler.file(cfg['deployment_path'], null, fs.statSync(cfg['deployment_path'])['size'], null, 'application/json');
+					}
+					
+					rest.post(api_url + '/paas/service/apaas/api/v1.1/apps/' + identity_domain , {
+						username : username,
+						password : password,
+						headers : {
+							'X-ID-TENANT-NAME' : identity_domain
+						},
+						multipart : true,
+						data: data_for_create
+					}).then(function (result) {
+						console.log('Successfully create application');
+						console.log('Please wait for several minutes before you could access Application ' + program.name + ' . The web url is ' + result.data.webURL);
+						resolve();
+					},function(error) {
+						console.error(chalk.red('Create application failed'));
+						console.error(chalk.red('Message: ' + error + '. Status Code: ' + error.statusCode));
+						reject(error);
+					});
+				});		
+			}else {
+				console.error(chalk.red('Unable to get application from the cloud. Check name and connection details'));
+				console.error(chalk.red('Message: ' + error + '. Status Code: ' + error.statusCode));
+				reject(error);
+			}
+		});
 	});
 }).catch(function (error) {
 	console.log('Catch all error', error);
