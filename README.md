@@ -2,11 +2,9 @@
 NPM module to deploy NodeJS applications to the Oracle Application Container Cloud. This will take care of packaging your application, uploading it to Storage Cloud Service and registering your application. 
 
 # Installation
-Download this code and then run in the download directory:
-	
-	$ npm link
+Install globally with:
 
-This will allow you to run 'acc-deploy' from any folder. 
+	$ npm install -g acc-deploy
 
 You will also need to create a configuration in your home directory. Create '.oracle-acc-config' and add the following:
 

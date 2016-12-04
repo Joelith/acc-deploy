@@ -1,6 +1,6 @@
 {
   "name": "acc-deploy",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A command-line tool to upload node projects to the Oracle Application Container Cloud Service",
   "main": "index.js",
   "scripts": {
