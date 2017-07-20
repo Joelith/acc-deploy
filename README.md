@@ -8,12 +8,15 @@ Install globally with:
 
 You will also need to create a configuration in your home directory. Create '.oracle-acc-config' and add the following:
 
+```
 username=<username>
 password=<password>
 identity_domain=<identity_domain>
 storage_container=<storage container name>
 storage_url=<storage REST endpoint>
 api_url=<ACC REST endpoint>
+```
+Note: api_url will be of the form https://apaas.{REGION}.oraclecloud.com/
 
 # Usage
 In the root of your node application, run:
